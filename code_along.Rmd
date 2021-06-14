@@ -1,0 +1,560 @@
+# Preparation
+
+To follow this tutorial you’ll need to install a lot of packages:
+
+```{r, eval = FALSE}
+renv::init()
+install.packages("remotes")
+remotes::install_github("hadley/emo")
+# --------------
+install.packages("tidyverse")
+install.packages("prismatic")
+install.packages("rcartocolor")
+install.packages("ggrepel")
+# --------------
+install.packages("sf")
+install.packages("raster")
+install.packages("ggspatial")
+install.packages("ggmap")
+install.packages("stars")
+install.packages("marmap")
+install.packages("rgeos")
+# --------------
+install.packages("rnaturalearth")
+install.packages("rnaturalearthdata")
+# --------------
+```
+
+# Setup
+
+We are going to save some plots an load some graphics, so it makes sense to run today's tutorial in its own Rstudio project:
+
+<center>
+![](img/rproj.png)
+</center>
+
+After creating your project make to have your data in place - within the folder `data/`:
+
+```
+├── bat.tif
+├── bayarea_county.dbf
+├── bayarea_county.prj
+├── bayarea_county.shp
+├── bayarea_county.shp.xml
+├── bayarea_county.shx
+├── caribbean.tif
+├── gadm36_DEU.gpkg
+├── german_cities.tsv
+├── german_elevation.tif
+└── landsat-sanfrancisco.tif
+```
+
+# Working with Vector Data
+
+For now, we load the packages {tidyverse}, {prismatic}, {sf} and {rnaturalearth} (as data source).
+
+```{r, eval = FALSE}
+# > 5 ----------
+library("tidyverse")
+library("prismatic")
+library("sf")
+library("rnaturalearth")
+```
+
+## The {sf} package: basics
+
+```{r, eval = FALSE}
+# > 6 ----------
+sf_points <- tibble(x = c(0,1,1,0), y = c(0, 0, 1, 1), id = LETTERS[1:4]) %>%
+  st_as_sf(coords = c("x", "y"))
+sf_line <- sf_points %>% summarise(geometry=st_combine(geometry)) %>% st_cast(to = "LINESTRING")
+sf_poly <- sf_points %>% summarise(geometry=st_combine(geometry)) %>% st_cast(to = "POLYGON")
+
+ggplot(sf_points, aes(color = id)) +
+  geom_sf()
+
+ggplot(sf_line) +
+  geom_sf()
+
+ggplot(sf_poly) +
+  geom_sf()
+```
+
+## The {sf} package: objects
+
+```{r, eval = FALSE}
+# > 7 ---------
+sf_points
+sf_poly
+```
+
+## The {sf} package: geometric operations
+
+```{r, eval = FALSE}
+# > 8.1 --------
+sf_center <- tibble(x = .75, y = .6)  %>%
+  st_as_sf(coords = c("x", "y"))
+
+sf_circle <- sf_center %>% 
+  st_buffer(dist = .45)
+
+ggplot() +
+  geom_sf(data = sf_poly) +
+  geom_sf(data = sf_circle, 
+          fill = clr_alpha("#FFA989")) +
+  geom_sf(data = sf_center)
+# > 8.2 --------
+ggplot() + 
+  geom_sf(data = st_intersection(sf_poly, sf_circle)) + 
+  coord_sf(xlim = c(0, 1.2), ylim = c(0, 1.05))
+# > 8.3 --------
+ggplot() +
+  geom_sf(data = st_union(sf_poly, sf_circle)) + 
+  coord_sf(xlim = c(0, 1.2), ylim = c(0, 1.05))
+# > 8.4 --------
+ggplot() +
+  geom_sf(data = st_difference(sf_poly, sf_circle)) + 
+  coord_sf(xlim = c(0, 1.2), ylim = c(0, 1.05))
+# > 8.5 --------
+ggplot() +
+  geom_sf(data = st_sym_difference(sf_poly, sf_circle)) + 
+  coord_sf(xlim = c(0, 1.2), ylim = c(0, 1.05))
+# > 8.6 --------
+ggplot() + 
+  geom_sf(data = sf_poly) +
+  geom_sf(data = st_centroid(sf_poly), color = "#FFA989") +
+  coord_sf(xlim = c(0, 1.2), ylim = c(0, 1.05))
+# > 8.7 --------
+ggplot() +
+  geom_sf(data = sf_line) +
+  geom_sf(data = st_segmentize(sf_line, .3) %>% 
+            st_cast("POINT"),
+          color = "#FFA989") +
+  coord_sf(xlim = c(0, 1.2), ylim = c(0, 1.05))
+```
+
+## Vector data: data sources (I)
+
+```{r, eval = FALSE}
+# > 9 ----------
+coast <- ne_coastline(scale = "small", returnclass = "sf")
+ggplot() +
+  geom_sf(data = coast)
+```
+
+## Vector data: data sources (II)
+
+```{r, eval = FALSE}
+# > 10 ---------
+ger <- read_sf("data/gadm36_DEU.gpkg", 
+               layer = "gadm36_DEU_1")
+ggplot() +
+  geom_sf(data = ger)
+```
+
+# Working with Raster Data
+
+```{r, eval = FALSE}
+# > 11 ---------
+library("raster")
+library("stars")
+library("marmap")
+library("ggspatial")
+```
+
+## The {raster} package: basics
+
+```{r, eval = FALSE}
+# > 12 ---------
+library("rcartocolor")
+
+toy <- raster(ncol = 6, nrow = 6,
+              xmn = 1, xmx = 6,
+              ymn = 1, ymx = 6)
+
+toy[] <- rpois(ncell(toy), lambda = 3)
+
+plot_r <- function(rast, size = 4){
+  ggplot(data = df_spatial(rast),
+         aes(x = x, y =y)) +
+    coord_equal(xlim = c(0, 7),
+                ylim = c(0, 7)) +
+    geom_tile(aes(fill = band1)) +
+    geom_text(aes(label = round(band1, digits = 1)),
+              color = "white", size = size) +
+    scale_fill_carto_c(palette = "Earth",
+                       na.value = rgb(0, 0, 0, .2))
+}
+
+plot_r(toy)
+```
+
+## The {raster} package: basic operations
+
+```{r, eval = FALSE}
+# > 13.1 -------
+toy_mean <- aggregate(toy, fact = 2, fun = mean)
+plot_r(toy_mean)
+# > 13.2 -------
+toy_modal <- aggregate(toy, fact = 2, fun = modal)
+plot_r(toy_modal)
+# > 13.3 -------
+toy_dis <- disaggregate(toy, fact = 2, method = 'bilinear')
+plot_r(toy_dis, size = 1)
+# > 13.4 -------
+e <- extent(2, 5, 2, 5)
+plot_r(crop(toy, e))
+# > 13.5 -------
+e <- extent(0, 7, 0, 7)
+plot_r(extend(toy, e))
+```
+
+## Raster data: data sources (single band)
+
+```{r, eval = FALSE}
+# > 14 ---------
+caribbian <- raster("data/caribbean.tif")
+
+ggplot(ggspatial::df_spatial(caribbian)) + 
+  geom_raster(aes(x = x, y = y, fill = band1), alpha = .8) +
+  scale_fill_distiller(palette = "Greys") +
+  coord_sf(crs = 4326, expand = 0) +
+  theme_minimal()
+```
+
+## Raster data: data sources (multi band)
+
+```{r, eval = FALSE}
+# > 15.1 -------
+sanfran <- brick("data/landsat-sanfrancisco.tif")
+
+as_rgb_v <- function(r,g,b){
+  rgb(r, g, b, maxColorValue = 255)
+  }
+
+sanfran_r <- ggspatial::df_spatial(sanfran) %>% 
+  filter(!is.na(band1)) %>% 
+  mutate(col = tibble(r = band1, g = band2, b = band3) %>%
+           pmap_chr(as_rgb_v))
+# > 15.2 -------
+sanfran_areas <- read_sf("data/bayarea_county.shp")
+
+sanfran_bb <- st_bbox(sanfran)
+
+sanfran_bb_sf <- tibble(
+  x = c(sanfran_bb[[1]], sanfran_bb[[3]],
+        sanfran_bb[[3]], sanfran_bb[[1]]),
+  y = c(sanfran_bb[[2]], sanfran_bb[[2]],
+        sanfran_bb[[4]], sanfran_bb[[4]])) %>% 
+  st_as_sf(coords = c("x", "y"), crs = 32610) %>% 
+  summarise(geometry = st_combine(geometry)) %>% 
+  st_cast("POLYGON")
+# > 15.3 -------
+ggplot(sanfran_r, aes(x, y, fill = col)) +
+  geom_raster(alpha = .8) +
+  geom_sf(data = sanfran_areas %>% st_transform(32610) %>%
+            st_intersection(sanfran_bb_sf),
+          inherit.aes = FALSE,
+          aes(color = COUNTY, 
+              fill = after_scale(clr_alpha(color, .3))))+
+  scale_fill_identity() +
+  rcartocolor::scale_color_carto_d(palette = "Prism")+
+  coord_sf(crs = 32610, expand = 0) +
+  theme_minimal() +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank())+
+  theme(legend.position = "bottom")
+```
+
+## The {raster} package: reprojecting
+
+```{r, eval = FALSE}
+# > 16.1 -------
+# library(marmap)
+# bat <- marmap::getNOAA.bathy(lon1 = -180, lon2 = 180,
+#                              lat1 = -90, lat2 = 90, resolution = 15) %>% 
+#   as.raster()
+# crs(bat) <- "+proj=longlat +datum=WGS84 +no_defs"
+# raster::writeRaster(bat, "data/bat.tif")
+# > 16.2 -------
+bat <- raster::raster("data/bat.tif")
+
+brks <- c(-12000, -6000, -4000, -2000, -200, 0,
+          100, 200, 500, 1000, 1500, 3000, 5000, 10000)
+
+pacific_centered <- '+proj=eck4 +lon_0=155 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m'
+
+scl_topo <- function(n){
+  scales::colour_ramp(
+    c(rcartocolor::carto_pal(n = 4, name = "Emrld"),
+      rcartocolor::carto_pal(n = 3, name = "BrwnYl")[2:3], "#000000")
+  )(x = seq(0, 1 , length.out = n))
+}
+
+clr_topo <- c(rev(RColorBrewer::brewer.pal(6, "Greys")[1:5]), scl_topo(8))  %>%
+  color() %>% 
+  clr_alpha(alpha = .9)
+
+# > 16.3 -------
+p_w <- ggplot(ggspatial::df_spatial(bat)) + 
+  geom_raster(aes(x, y, fill = band1)) +
+  scale_fill_gradientn("Elevation",
+                       colors = clr_topo, 
+                       values = scales::rescale(brks), 
+                       limits = range(brks)) +
+  coord_sf(crs = 4326, expand = 0) +
+  guides(fill = guide_colorbar(title.position = "top",
+                               barwidth = unit(.9, "npc"),
+                               barheight = unit(7, "pt"))) +
+  theme_minimal() +
+  theme(panel.grid = element_line(color = "black", linetype = 3),
+        axis.title = element_blank(),
+        legend.position = "bottom")
+p_w
+# > 16.4 -------
+ggplot(ggspatial::df_spatial(projectRaster(bat, crs = pacific_centered)))+ 
+  geom_raster(aes(x, y, fill = band1)) +
+  scale_fill_gradientn("Elevation",
+                       colors = clr_topo, 
+                       values = brks %>% scales::rescale(), 
+                       limits = range(brks)) +
+  coord_sf(crs=pacific_centered, expand=0)+
+  guides(fill = guide_colorbar(title.position = "top",
+                               barwidth = unit(.9, "npc"),
+                               barheight = unit(7, "pt"))) +
+  theme_minimal() +
+  theme(panel.grid = element_line(color = "black", linetype = 3),
+        axis.title = element_blank(),
+        legend.position = "bottom")
+```
+
+## Breaking raster projections `r emo::ji("fearful")`
+
+```{r, eval = FALSE}
+# > 17.1 -------
+ggplot(ggspatial::df_spatial(bat))+ 
+  geom_raster(aes(x, y, fill = band1)) +
+  scale_fill_gradientn("Elevation",
+                       colors = clr_topo, 
+                       values = scales::rescale(brks), 
+                       limits = range(brks)) +
+  geom_sf(data = coast, color = "#FFA989")+
+  coord_sf(crs = 4326, expand = 0) +
+  guides(fill = guide_colorbar(title.position = "top",
+                               barwidth = unit(.9, "npc"),
+                               barheight = unit(7, "pt"))) +
+  theme_minimal() +
+  theme(panel.grid = element_line(color="black", linetype = 3),
+        axis.title = element_blank(),
+        legend.position = "bottom")
+# > 17.2 -------
+ggplot(ggspatial::df_spatial(bat))+ 
+  geom_raster(aes(x, y, fill = band1)) +
+  scale_fill_gradientn("Elevation",
+                       colors = clr_topo, 
+                       values = scales::rescale(brks), 
+                       limits = range(brks)) +
+  geom_sf(data = coast, color = "#FFA989")+
+  coord_sf(crs = pacific_centered, expand = 0)+
+  guides(fill = guide_colorbar(title.position = "top",
+                               barwidth = unit(.9, "npc"),
+                               barheight = unit(7, "pt"))) +
+  theme_minimal() +
+  theme(panel.grid = element_line(color = "black", linetype = 3),
+        axis.title = element_blank(),
+        legend.position = "bottom")
+# > 17.3 -------
+ggplot(ggspatial::df_spatial(projectRaster(bat, crs = pacific_centered)))+ 
+  geom_raster(aes(x, y, fill = band1)) +
+  scale_fill_gradientn("Elevation",
+                       colors = clr_topo, 
+                       values = scales::rescale(brks), 
+                       limits = range(brks)) +
+  geom_sf(data = coast, color = "#FFA989")+
+  coord_sf(crs = pacific_centered, expand = 0)+
+  guides(fill=guide_colorbar(title.position = "top",
+                             barwidth = unit(.9, "npc"),
+                             barheight = unit(7, "pt"))) +
+  theme_minimal() +
+  theme(panel.grid = element_line(color = "black", linetype = 3),
+        axis.title = element_blank(),
+        legend.position = "bottom")
+```
+
+# Combining Vector and Raster Data
+
+## Masking of raster layers
+
+```{r, eval = FALSE}
+# > 19.1 -------
+africa <- ne_countries(scale = "small", returnclass = "sf") %>% 
+  filter(continent == "Africa") %>%
+  summarise(geometry = st_union(geometry))
+
+p_w +
+  geom_sf(data = africa, fill = rgb(1, 0, 0, .2))
+# > 19.2 -------
+africa_elev <- bat %>%
+  crop(y = africa) %>% 
+  mask(mask = africa)
+
+ggplot(ggspatial::df_spatial(africa_elev)) + 
+  geom_raster(aes(x, y, fill = band1)) +
+  scale_fill_gradientn("Elevation",
+                       colors = clr_topo,
+                       na.value = "transparent",
+                       values = scales::rescale(brks), 
+                       limits = range(brks)) +
+  coord_sf(crs = 4326, expand = 0) +
+  guides(fill = guide_colorbar(title.position = "top",
+                               barwidth = unit(.9, "npc"),
+                               barheight = unit(7, "pt"))) +
+  theme_minimal() +
+  theme(panel.grid = element_line(color = "black", linetype = 3),
+        axis.title = element_blank(),
+        legend.position = "bottom")
+```
+
+## Conversions and Extractons
+
+```{r, eval = FALSE}
+# > 20.1 -------
+sf_raster_empty_na <- function(sf, asp = 1, res = .2){
+  bb <- st_bbox(sf)
+  extbb <- extent(c(bb[[1]], bb[[3]],
+                    bb[[2]], bb[[4]]))
+  r <- raster(extbb, crs = st_crs(sf), resolution = c(res, res*asp))
+  r[] <- NA
+  r
+}
+
+ger_r_empty <- ger %>%  
+  sf_raster_empty_na(res = .2, asp = .6)
+
+ggplot(ggspatial::df_spatial(ger_r_empty))+
+  geom_sf(data = ger) +
+  geom_tile(aes(x, y),
+            color = "black",
+            fill = "transparent")
+# > 20.2 -------
+ger_agg <- st_rasterize(sf = ger,
+                        template = ger_r_empty %>% 
+                          stars::st_as_stars()) %>%
+  stars:::st_as_raster()
+
+ggplot(ggspatial::df_spatial(ger_agg) %>% 
+         mutate(ID = levels(factor(ger$NAME_1))[band1]))+
+  geom_raster(aes(x,y, fill = ID)) +
+  scale_fill_manual(values = colorRampPalette(carto_pal(9, "Prism"))(16) %>% 
+                      sample(16, replace = FALSE),
+                    na.value = "transparent")+
+  coord_sf(crs = 4326) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# > 20.3 -------
+ger_pixel_sf <- ger_agg %>% 
+  rasterToPolygons() %>%
+  st_as_sf() %>% 
+  st_set_crs(value = 4326) %>% 
+  group_by(layer) %>% 
+  mutate(geometry = st_union(geometry)) %>% 
+  ungroup() 
+
+ggplot()+
+  geom_sf(data = ger_pixel_sf,
+          aes(fill = factor(layer),
+              color = after_scale(clr_darken(fill))))+
+  scale_fill_manual(values = colorRampPalette(carto_pal(9, "Prism"))(16), 
+                    guide = FALSE) +
+  theme_minimal()
+# > 20.4 -------
+german_elev <- raster("data/german_elevation.tif")
+german_cities <- read_tsv("data/german_cities.tsv") %>%
+  st_as_sf(coords = c("long", "lat"), crs = 4326)
+
+ggplot() + 
+  geom_raster(data = ggspatial::df_spatial(german_elev),
+              aes(x, y, fill = band1), alpha = .8) +
+  geom_sf(data = ger, fill = "transparent",
+          color = "black", size = .4) +
+  geom_sf(data = german_cities,
+          aes(size = pop_2019),
+          shape = 21, fill = "white") +
+  scale_fill_carto_c(palette = "Earth", direction = -1) +
+  scale_size(guide = FALSE) +
+  coord_sf(crs = 4326,  expand = 0) +
+  theme(legend.position = "none",
+        axis.title = element_blank())
+# > 20.5 -------
+german_cities_elev <- german_cities %>% 
+  mutate(elevation = as_tibble(st_extract(st_as_stars(german_elev),
+                                          german_cities))$german_elevation)
+
+ggplot(data = german_cities_elev,
+       aes(x = elevation, y = log10(pop_2019),
+           color = as.numeric(as.factor(name)))) +
+  geom_point(size = 2.5, shape = 21,
+             aes(fill = after_scale(clr_alpha(color))))+
+  ggrepel::geom_text_repel(aes(label = name))+
+  theme_minimal() +
+  guides(color = FALSE)
+```
+
+# {ggplot2} mapping utilities
+
+```{r, eval = FALSE}
+# > 21 ---------
+library("ggmap")
+```
+
+## stamen or google-maps background tiles
+
+```{r, eval = FALSE}
+# > 22.1 -------
+
+violent_crimes_sf <- crime %>% 
+  filter(!(offense %in% c("auto theft", "theft", "burglary")),
+         -95.39681 <= lon & lon <= -95.34188,
+         29.73631 <= lat & lat <=  29.78400) %>% 
+  st_as_sf(coords = c("lon", "lat"),
+           crs = 4326)
+
+crimes_bb <- violent_crimes_sf %>%
+  st_bbox()
+
+stamen_tiles <- get_stamenmap(bbox = c(left = crimes_bb[[1]],
+                                       bottom =  crimes_bb[[2]],
+                                       right =  crimes_bb[[3]],
+                                       top =  crimes_bb[[4]]), 
+                              zoom = 15,
+                              maptype = "watercolor")
+```
+
+## Adding map annotations
+
+```{r, eval = FALSE}
+# > 22.2 -------
+stamen_tiles %>%
+  ggmap() +
+  geom_sf(data = violent_crimes_sf,
+          inherit.aes = FALSE,
+          aes(fill = offense),
+          shape = 21) +
+  scale_fill_brewer(palette = "Set1") +
+  theme(legend.position = "bottom",
+        axis.title = element_blank()) +
+  coord_sf(crs = 4326)
+
+# > 23 ---------
+ggplot(sanfran_r, aes(x, y, fill = col)) +
+  geom_raster(alpha = .8) +
+  scale_fill_identity()+
+  annotation_scale(style = "ticks", location = "br") +
+  annotation_north_arrow(location = "bl", 
+                         which_north = "true",
+                         style = north_arrow_fancy_orienteering)+
+  coord_sf(crs = 32610, expand = 0) +
+  theme(axis.title = element_blank())
+```
+
